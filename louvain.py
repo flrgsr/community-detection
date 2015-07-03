@@ -42,6 +42,14 @@ class Community(object):
 		nodelist = [node for node, com in cls.communities.items() if community == com]
 		return nodelist
 
+	def renumber_communites(self, community):
+		vals = set(self.community.values())
+		mapping = dict(zip(vals,range(len(vals))))
+
+		for key in community.keys():
+			self.community[key] = mapping[self.community[key]]
+
+
 
 def delta_q(graph, community, node):
 	"""Compute the gain of modularity delta_Q if node would be inserted in community
