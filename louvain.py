@@ -53,6 +53,21 @@ class Community(object):
 		for key in communities.keys():
 			cls.communities[key] = mapping[cls.communities[key]]
 
+def second_pass(communities, graph):
+	""" Nodes belonging to the same community as detected in pass 1 are merged into a single node.
+		The new graph is build up from these so called "super nodes"
+	"""
+	 aggreated_graph = nx.Graph()
+
+	# The new graph consists of as many "supernodes" as there are communities
+	aggreated_grap.add_nodes_from(set(communities.values()))
+	# make edges between communites, if communites are the same self-loops are generated
+	new_edges=[(communities[node1], communities[node2]) for node1, node2 in graph.edges()]
+	aggreated_graph.add_nodes_from(new_edges)
+
+	return aggreated_graph
+
+
 def modularity(graph, communities):
 	q = 0
 	m = graph.size()
