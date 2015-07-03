@@ -46,13 +46,22 @@ class Community(object):
 		return nodelist
 
 	@classmethod
-	def renumber_communites(cls, community):
-		vals = set(cls.community.values())
+	def renumber_communites(cls, communities):
+		vals = set(cls.communities.values())
 		mapping = dict(zip(vals,range(len(vals))))
 
-		for key in community.keys():
-			cls.community[key] = mapping[cls.community[key]]
+		for key in communities.keys():
+			cls.communities[key] = mapping[cls.communities[key]]
 
+def modularity(graph, communities):
+	q = 0
+	m = graph.size()
+	for communtiy in set(communities.values()):
+		nodes = Community.get_all_nodes_of_community(community)
+		sigma_in  = sum(graph.degree((nodes)).values())
+		sigma_tot = len(set(sum([graph.neighbors(node) for node in nodes], [])) )
+        q += (sigma_in / m) - ((sigma_tot / m)** 2)
+    	return q
 
 
 def delta_q(graph, community, node):
