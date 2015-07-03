@@ -33,6 +33,9 @@ class Community(object):
 	"""Class representing communities
 	   A community is here a disjoint set of nodes
 	"""
+	communities = dict(zip(graph, range(graph.number_of_nodes())))
+
+	# TODO communities class or instance?
 	def __init__(self, graph):
 		# super(Community, self).__init__()
 		communities = dict(zip(graph, range(graph.number_of_nodes())))
@@ -42,12 +45,13 @@ class Community(object):
 		nodelist = [node for node, com in cls.communities.items() if community == com]
 		return nodelist
 
-	def renumber_communites(self, community):
-		vals = set(self.community.values())
+	@classmethod
+	def renumber_communites(cls, community):
+		vals = set(cls.community.values())
 		mapping = dict(zip(vals,range(len(vals))))
 
 		for key in community.keys():
-			self.community[key] = mapping[self.community[key]]
+			cls.community[key] = mapping[cls.community[key]]
 
 
 
