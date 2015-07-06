@@ -33,31 +33,36 @@ class Community(object):
 	"""Class representing communities
 	   A community is here a disjoint set of nodes
 	"""
-	communities = dict(zip(graph, range(graph.number_of_nodes())))
 
 	# TODO communities class or instance?
 	def __init__(self, graph):
-		# super(Community, self).__init__()
-		communities = dict(zip(graph, range(graph.number_of_nodes())))
+		self.communities = dict(zip(graph, range(graph.number_of_nodes())))
+		self.m = float(graph.size())
+		self.degrees_per_node = graph.degree(graph.nodes())
+		self.degrees_per_community = self.degrees_per_node.copy()
+		# number of links within the community
+		self.internals = {i:i-i for i in range(graph.number_of_nodes())}
+
 	
-	@classmethod	
-	def get_all_nodes_of_community(cls, community):
-		nodelist = [node for node, com in cls.communities.items() if community == com]
+	def get_all_nodes_of_community(self, community):
+		"""
+		Parameter community = int representing number of community
+		"""
+		nodelist = [node for node, com in self.communities.items() if community == com]
 		return nodelist
 
-	@classmethod
-	def renumber_communites(cls, communities):
-		vals = set(cls.communities.values())
+	def renumber_communites(slf, communities):
+		vals = set(self.communities.values())
 		mapping = dict(zip(vals,range(len(vals))))
 
 		for key in communities.keys():
-			cls.communities[key] = mapping[cls.communities[key]]
+			self.communities[key] = mapping[self.communities[key]]
 
 def second_pass(communities, graph):
 	""" Nodes belonging to the same community as detected in pass 1 are merged into a single node.
 		The new graph is build up from these so called "super nodes"
 	"""
-	 aggreated_graph = nx.Graph()
+	aggreated_graph = nx.Graph()
 
 	# The new graph consists of as many "supernodes" as there are communities
 	aggreated_grap.add_nodes_from(set(communities.values()))
@@ -68,14 +73,28 @@ def second_pass(communities, graph):
 	return aggreated_graph
 
 
-def modularity(graph, communities):
-	q = 0
-	m = graph.size()
-	for communtiy in set(communities.values()):
-		nodes = Community.get_all_nodes_of_community(community)
-		sigma_in  = sum(graph.degree((nodes)).values())
-		sigma_tot = len(set(sum([graph.neighbors(node) for node in nodes], [])) )
-        q += (sigma_in / m) - ((sigma_tot / m)** 2)
+def modularity(graph, communityRef):
+	"""
+	Compute the modularity of the graph using:
+
+	.. math::
+
+	M = \sum_{c=1}^{n_C} \left [ \frac{L_c}{L} - \left (  \frac{k_c}{2L} \right ) \right ]
+
+	where L_c is the total number of links within the community C and k_c is the total degree of the noes in this community
+
+	References:
+	-----------
+	.. [1] M. E. J. Newman and M. Girvan (2008).
+		   Finding and evaluating community structure in networks.	
+	 	   Phys. Rev. E 69, 026113
+	"""
+	q = 0.0
+	m = float(communityRef.m)
+	for community in set(communityRef.communities.values()):
+		L_c = communityRef.internals.get(community, 0.0)
+		K_c = communityRef.degrees_per_community.get(community, 0.0)
+		q += (L_c / m) - ((K_c / (2.0*m))** 2.)
     	return q
 
 
