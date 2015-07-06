@@ -34,7 +34,6 @@ class Community(object):
 	   A community is here a disjoint set of nodes
 	"""
 
-	# TODO communities class or instance?
 	def __init__(self, graph):
 		self.communities = dict(zip(graph, range(graph.number_of_nodes())))
 		self.m = float(graph.size())
@@ -57,6 +56,31 @@ class Community(object):
 
 		for key in communities.keys():
 			self.communities[key] = mapping[self.communities[key]]
+
+
+def remove(node, community_to_move, com_ref, links):
+	com_ref.degrees_per_community[community_to_move] = com_ref.degrees_per_community.get(community_to_move, 0.0) - com.degrees_per_node.get(node, 0.0)
+	com_ref.internals[community_to_move] = float(com_ref.internals.get(community_to_move, 0.0) - links)	
+	com_ref.communities[node] = -1
+
+def insert(node, community_to_move, com_ref, links):
+	com_ref.communities[node] = commmmunity_to_move
+	com_ref.degrees_per_community[commmmunity_to_move] = (com_ref.degrees_per_community.get(commmmunity_to_move, 0.0) + com_ref.degrees_per_node.get(node, 0.0))
+	com_ref.internals[commmmunity_to_move] = float(com_ref.internals.get(commmmunity_to_move, 0.0) + links)
+
+def neighbourhood_link_strength(node, graph, communities):
+	community_links = {}
+	for neighbour in graph.neighbors(node):
+		community_of_neighbour = communities[neighbour]
+		community_links[community_of_neighbour] = community_links.get(community_of_neighbour, 0) + 1
+	return community_links
+
+
+def fist_pass(graph, com_ref):
+	for node in graph.nodes():
+		node_community = com_ref.communities[node]
+		deg_comm
+
 
 def second_pass(communities, graph):
 	""" Nodes belonging to the same community as detected in pass 1 are merged into a single node.
