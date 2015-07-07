@@ -184,11 +184,14 @@ def second_pass(communities, graph):
 
 	# The new graph consists of as many "supernodes" as there are communities
 	aggregated_graph.add_nodes_from(set(communities.values()))
-	# make edges between communites, if communites are the same self-loops are generated
-	new_edges=[(communities[node1], communities[node2]) for node1, node2 in graph.edges()]
-	aggregated_graph.add_edges_from(new_edges)
+	# make edges between communites, bundle more edges between nodes in weight attribute
+	edge_list=[(communities[node1], communities[node2], attr.get('weight', 1) ) for node1, node2, attr in graph.edges(data=True)]
+	sorted_edge_list = sorted(edge_list)
+	sum_z = lambda tuples: sum(t[2] for t in tuples)
+	weighted_edge_list = [(k[0], k[1], sum_z(g)) for k, g in groupby(sorted_edge_list, lambda t: (t[0], t[1]))]
+	aggregated_graph.add_weighted_edges_from(weighted_edge_list)
 
-	# return aggregated_graph
+	return aggregated_graph
 
 
 	
