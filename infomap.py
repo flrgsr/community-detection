@@ -165,6 +165,13 @@ class Partition(object):
 			#node[pick]['MODULE'] = bestM;
 
 
+def first_pass():
+	pass
+
+
+def second_pass():
+	pass
+
 def infomap(graph):
 	import pdb; pdb.set_trace()
 
