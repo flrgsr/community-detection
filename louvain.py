@@ -104,13 +104,13 @@ def renumber_communites(communities):
 
 def remove(node, community_to_move, com_ref, links):
 	com_ref.degrees_per_community[community_to_move] = com_ref.degrees_per_community.get(community_to_move, 0.0) - com_ref.degrees_per_node.get(node, 0.0)
-	com_ref.internals[community_to_move] = float(com_ref.internals.get(community_to_move, 0.0) - links)	
+	com_ref.internals[community_to_move] = float(com_ref.internals.get(community_to_move, 0.0) - links - com_ref.loops.get(node, 0.0))	
 	com_ref.communities[node] = -1
 
 def insert(node, community_to_move, com_ref, links):
 	com_ref.communities[node] = community_to_move
 	com_ref.degrees_per_community[community_to_move] = (com_ref.degrees_per_community.get(community_to_move, 0.0) + com_ref.degrees_per_node.get(node, 0.0))
-	com_ref.internals[community_to_move] = float(com_ref.internals.get(community_to_move, 0.0) + links)
+	com_ref.internals[community_to_move] = float(com_ref.internals.get(community_to_move, 0.0) + links + com_ref.loops.get(node, 0.0))
 
 def neighbourhood_link_strength(node, graph, com_ref):
 	community_links = {}

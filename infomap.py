@@ -7,6 +7,7 @@ __author__ = """Florian Gesser (gesser.florian@googlemail.com)"""
 
 NODE_FREQUENCY  = 'NODE_FREQUENCY'
 EXIT            = 'EXIT'
+EPSILON_REDUCED = 0.0000001
 
 import numpy as np
 import networkx as nx
@@ -89,7 +90,7 @@ class Partition(object):
 			community_links[community_of_neighbour] = community_links.get(community_of_neighbour, 0) + 1
 		return community_links
 
-	def move(self):
+	def determine_best_new_module(self):
 		randomSequence = self.get_random_permutation_of_nodes()
 
 		for index, curr_node in enumerate(self.graph):
@@ -137,48 +138,87 @@ class Partition(object):
 
 		if bestM != fromM:
 
-			node_i_exit   = self.graph.node[curr_node][EXIT]
-			node_i_degree = self.graph.degree(curr_node)
+		return bestM
 
-			self.exitDegree        -= self.mod_exit[fromM] + self.mod_exit[bestM];
-			self.exit_log_exit     -= self.plogp(mod_exit[fromM]) + self.plogp(mod_exit[bestM]);
-			self.degree_log_degree -= self.plogp(mod_exit[fromM] + self.mod_degree[fromM]) + self.plogp(mod_exit[bestM] + self.mod_degree[bestM]); 
+	def move(bestM):
+		node_i_exit   = self.graph.node[curr_node][EXIT]
+		node_i_degree = self.graph.degree(curr_node)
 
-			self.mod_exit[fromM]    -= node_i_exit - 2*wfromM;
-			self.mod_degree[fromM]  -= node_i_degree;
-			# TODO member structure
-			self.mod_members[fromM] -= self.graph.node[pick];
-			self.mod_exit[bestM]    += node_i_exit - 2*best_weight;
-			self.mod_degree[bestM]  += node_i_degree;
-			# TODO member structure
-			self.mod_members[bestM] += self.graph.node[pick];
+		self.exitDegree        -= self.mod_exit[fromM] + self.mod_exit[bestM];
+		self.exit_log_exit     -= self.plogp(mod_exit[fromM]) + self.plogp(mod_exit[bestM]);
+		self.degree_log_degree -= self.plogp(mod_exit[fromM] + self.mod_degree[fromM]) + self.plogp(mod_exit[bestM] + self.mod_degree[bestM]); 
 
-			self.exitDegree        += self.mod_exit[fromM] + mod_exit[bestM];
-			self.exit_log_exit     += self.plogp(self.mod_exit[fromM]) + self.plogp(self.mod_exit[bestM]);
-			self.degree_log_degree += self.plogp(self.mod_exit[fromM] + self.mod_degree[fromM]) + self.plogp(self.mod_exit[bestM] + self.mod_degree[bestM]); 
-			
-			self.exit = self.plogp(exitDegree);
-			
-			self.code_length = exit - 2.0*exit_log_exit + degree_log_degree - nodeDegree_log_nodeDegree;
-			
-			# See other TODO
-			#node[pick]['MODULE'] = bestM;
+		self.mod_exit[fromM]    -= node_i_exit - 2*wfromM;
+		self.mod_degree[fromM]  -= node_i_degree;
+		# TODO member structure
+		self.mod_members[fromM] -= self.graph.node[pick];
+		self.mod_exit[bestM]    += node_i_exit - 2*best_weight;
+		self.mod_degree[bestM]  += node_i_degree;
+		# TODO member structure
+		self.mod_members[bestM] += self.graph.node[pick];
+
+		self.exitDegree        += self.mod_exit[fromM] + mod_exit[bestM];
+		self.exit_log_exit     += self.plogp(self.mod_exit[fromM]) + self.plogp(self.mod_exit[bestM]);
+		self.degree_log_degree += self.plogp(self.mod_exit[fromM] + self.mod_degree[fromM]) + self.plogp(self.mod_exit[bestM] + self.mod_degree[bestM]); 
+		
+		self.exit = self.plogp(exitDegree);
+		
+		self.code_length = exit - 2.0*exit_log_exit + degree_log_degree - nodeDegree_log_nodeDegree;
+		
+		# See other TODO
+		#node[pick]['MODULE'] = bestM;
 
 
-def first_pass():
-	pass
+	def first_pass(self):
+		 best_new_module = self.determine_best_new_module()
+		 self.move(best_new_module)
 
 
-def second_pass():
-	pass
+	def second_pass(self):
+		aggregated_graph = nx.Graph()
+
+		# The new graph consists of as many "supernodes" as there are partitions
+		aggregated_graph.add_nodes_from(set(partition.values()))
+		# make edges between communites, bundle more edges between nodes in weight attribute
+		edge_list=[(partition[node1], partition[node2], attr.get('weight', 1) ) for node1, node2, attr in graph.edges(data=True)]
+		sorted_edge_list = sorted(edge_list)
+		sum_z = lambda tuples: sum(t[2] for t in tuples)
+		weighted_edge_list = [(k[0], k[1], sum_z(g)) for k, g in groupby(sorted_edge_list, lambda t: (t[0], t[1]))]
+		aggregated_graph.add_weighted_edges_from(weighted_edge_list)
+
+		return aggregated_graph
+
 
 def infomap(graph):
-	import pdb; pdb.set_trace()
+	# import pdb; pdb.set_trace()
+
+	# partition.move()
+
 
 	partition = Partition(graph)
 	partition.init()
 
-	partition.move()
+	parition_list = list()
+	first_pass()
+	new_codelength = partition.code_length
+	partition = renumber(partition)
+	parition_list.append(partition)
+	codelength = new_codelength
+	current_graph = second_pass(partition, graph)
+	parition = parition.reinitialize(graph)
+
+	while True:
+		first_pass()
+		new_codelength = partition.codelength
+		if new_codelength - codelength < EPSILON_REDUCED :
+			break
+		partition = renumber(partition)
+		parition_list.append(partition)
+		codelength = new_codelength
+		graph = second_pass(partition, graph)
+		parition = parition.reinitialize(graph)
+	return parition_list[:]
+
 
 def main():
 	#test prep
