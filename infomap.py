@@ -7,12 +7,16 @@ __author__ = """Florian Gesser (gesser.florian@googlemail.com)"""
 
 NODE_FREQUENCY  = 'NODE_FREQUENCY'
 EXIT            = 'EXIT'
-EPSILON_REDUCED = 1e-07 # 0.0000001
+EPSILON_REDUCED = 1.0e-10
+PASS_MAX        = -1
+
+import math
+from itertools import groupby
+import sys
 
 import numpy as np
 import networkx as nx
-import math
-import sys
+
 sys.path.append("/Users/florian/Data/Pending/GSOC/code/community_evaluation/mini_pipeline_community/")
 import buildTestGraph as btg
 
@@ -21,14 +25,46 @@ class Partition(object):
     def __init__(self, graph):
         super(Partition, self).__init__()
         self.graph         = graph
-        self.modules = dict(zip(self.graph, range(graph.number_of_nodes())))
+        #self.modules = dict(zip(self.graph, range(self.graph.nodes()[0], graph.number_of_nodes())))
+        self.modules = dict([])
 
+        count = 0
+        for node in self.graph.nodes():
+            self.modules[node] = count
+            count += 1
 
         self.Nnode         = self.graph.number_of_nodes()
         self.Nmod          = self.Nnode
         self.degree        = sum(self.graph.degree().values())
         self.inverseDegree = 1.0/self.degree
 
+
+        self.nodeDegree_log_nodeDegree = 0.0
+        self.exit_log_exit     = 0.0
+        self.degree_log_degree = 0.0
+        self.exitDegree        = 0.0
+        self.exit 			   = 0.0
+        self.code_length       = 0.0
+
+        self.mod_exit    = dict([])
+        self.mod_degree  = dict([])
+
+
+
+    def init(self):
+
+        #TODO  what has to change when this gets called in later iterations?
+
+        self.modules = dict([])
+        self.Nnode         = self.graph.number_of_nodes()
+        self.Nmod          = self.Nnode
+        self.degree        = sum(self.graph.degree().values())
+        self.inverseDegree = 1.0/self.degree
+
+        count = 0
+        for node in self.graph.nodes():
+            self.modules[node] = count
+            count += 1
 
         """node frequency as computed by page rank currenlty not used"""
         page_ranks = nx.pagerank(self.graph)
@@ -41,20 +77,6 @@ class Partition(object):
         degrees={i:self.graph.degree(i) for i in self.graph}
         nx.set_node_attributes(self.graph, 'EXIT', degrees)
 
-
-        self.nodeDegree_log_nodeDegree = 0.0
-        self.exit_log_exit     = 0.0
-        self.degree_log_degree = 0.0
-        self.exitDegree        = 0.0
-        self.exit 			   = 0.0
-        self.code_length       = 0.0
-
-        self.mod_exit    = dict([])
-        self.mod_degree  = dict([])
-        self.mod_members = dict([])
-
-
-    def init(self):
         self.nodeDegree_log_nodeDegree = sum([self.plogp(self.graph.degree(node)) for node in self.graph])
 
         for index, node in enumerate(self.graph):
@@ -65,10 +87,9 @@ class Partition(object):
             self.degree_log_degree += self.plogp(node_i_exit + node_i_degree)
             self.exitDegree        += node_i_exit
 
-            self.mod_exit[node]    = node_i_exit
-            self.mod_degree[node]  = node_i_degree
-            # TODO set this to the correct value, in what data structure do we hold the members?
-            self.mod_members[node] = 0
+            self.mod_exit[index]    = node_i_exit
+            self.mod_degree[index]  = node_i_degree
+
 
         self.exit = self.plogp(self.exitDegree)
         self.code_length = self.exit - 2.0 * self.exit_log_exit + self.degree_log_degree - self.nodeDegree_log_nodeDegree
@@ -89,106 +110,143 @@ class Partition(object):
             community_of_neighbour = self.modules[neighbour]
             community_links[community_of_neighbour] = community_links.get(community_of_neighbour, 0) + 1
         return community_links
+        # weights = {}
+        # for neighbor, datas in self.graph[node].items() :
+        #     if neighbor != node :
+        #         weight = datas.get("weight", 1)
+        #         neighborcom = self.modules[neighbor]
+        #         weights[neighborcom] = weights.get(neighborcom, 0) + weight
+        #
+        # return weights
 
-    def determine_best_new_module(self):
+    def renumber_modules(self, current_modules):
+        ret = current_modules.copy()
+        vals = set(current_modules.values())
+        mapping = dict(zip(vals,range(len(vals))))
+
+        for key in current_modules.keys():
+            ret[key] = mapping[current_modules[key]]
+
+        return ret
+
+	for key in communities.keys():
+		ret[key] = mapping[communities[key]]
+
+	return ret
+
+    def determine_best_new_module(self, iteration):
         randomSequence = self.get_random_permutation_of_nodes()
 
-        for index, curr_node in enumerate(self.graph):
-            pick   = randomSequence[curr_node-1]
+        modif = True
+        nb_pass_done = 0
 
-            # if index == 0:
-            #     pick = 5
-            # elif index == 1:
-            #     pick = 1
-            # elif index == 2:
-            #     pick = 6
+        curr_mod = self.code_length
 
-            Nlinks = len(self.graph.neighbors(pick))
-            #debug
-            # this is the real thing
-            wNtoM  = self.neighbourhood_link_strength(pick)
+        while modif and nb_pass_done != PASS_MAX:
+            curr_mod = self.code_length
+            modif = False
+            nb_pass_done += 1
 
-            #wNtoM = {0: 1, 3: 1, 1: 1, 2: 1}
-            #from collections import OrderedDict
-            #wNtoM = OrderedDict([(0, 1), (3, 1), (1, 1), (2, 1)])
+            for index, curr_node in enumerate(self.graph):
+                pick   = randomSequence[index]
+                #pick = curr_node
+
+                # if index == 0:
+                #     pick = 5
+                # elif index == 1:
+                #     pick = 1
+                # elif index == 2:
+                #     pick = 6
+
+                Nlinks = len(self.graph.neighbors(pick))
+                #debug
+                # this is the real thing
+                wNtoM  = self.neighbourhood_link_strength(pick)
+
+                #wNtoM = {0: 1, 3: 1, 1: 1, 2: 1}
+                #from collections import OrderedDict
+                #wNtoM = OrderedDict([(0, 1), (3, 1), (1, 1), (2, 1)])
 
 
-            fromM  = self.modules[pick]
-            #that is wrong, it would sum up all the edges from the neighbour
-            #wfromM = sum([self.graph.node[neighbour][EXIT] for neighbour in self.graph.neighbors(pick)])
+                fromM  = self.modules[pick]
+                #that is wrong, it would sum up all the edges from the neighbour
+                #wfromM = sum([self.graph.node[neighbour][EXIT] for neighbour in self.graph.neighbors(pick)])
 
-            #instead what we want is to look up the weight to own module in the community_links dict
-            wfromM =  wNtoM.get(fromM, 0.0)
+                #instead what we want is to look up the weight to own module in the community_links dict
+                wfromM =  wNtoM.get(fromM, 0.0)
 
-            bestM       = fromM
-            best_weight = 0.0
-            best_delta  = 0.0
+                bestM       = fromM
+                best_weight = 0.0
+                best_delta  = 0.0
 
-            NmodLinks = len((wNtoM.keys()))
+                NmodLinks = len((wNtoM.keys()))
 
-            for key, value in wNtoM.items():
-                toM  = key
-                wtoM = value
+                for key, value in wNtoM.items():
+                    toM  = key
+                    wtoM = value
 
-                deltaL = 0
+                    deltaL = 0
 
-                if toM != fromM:
+                    correction = 0
+
+                    if toM != fromM:
+                        node_i_exit   = self.graph.node[pick][EXIT]
+                        node_i_degree = self.graph.degree(pick)
+
+                        delta_exit = self.plogp(self.exitDegree - 2*wtoM + 2*wfromM) - self.exit
+
+                        delta_exit_log_exit = - self.plogp(self.mod_exit[fromM + correction])                               \
+                                              - self.plogp(self.mod_exit[toM + correction])                                 \
+                                              + self.plogp(self.mod_exit[fromM + correction] - node_i_exit + 2*wfromM)      \
+                                              + self.plogp(self.mod_exit[toM + correction] + node_i_exit - 2*wtoM)
+
+                        delta_degree_log_degree = - self.plogp(self.mod_exit[fromM +correction ] + self.mod_degree[fromM +correction])                                          \
+                                                  - self.plogp(self.mod_exit[toM + correction] + self.mod_degree[toM + correction])                                              \
+                                                  + self.plogp(self.mod_exit[fromM +correction ] + self.mod_degree[fromM +correction] - node_i_exit - node_i_degree + 2*wfromM) \
+                                                  + self.plogp(self.mod_exit[toM + correction] + self.mod_degree[toM + correction] + node_i_exit + node_i_degree - 2*wtoM)
+
+                        deltaL = delta_exit - 2.0 * delta_exit_log_exit + delta_degree_log_degree
+
+                    if deltaL < best_delta:
+                        bestM = toM
+                        best_weight = wtoM
+                        best_delta = deltaL
+
+                if bestM != fromM:
+                    modif = True
                     node_i_exit   = self.graph.node[pick][EXIT]
                     node_i_degree = self.graph.degree(pick)
 
-                    delta_exit = self.plogp(self.exitDegree - 2*wtoM + 2*wfromM) - self.exit
 
-                    delta_exit_log_exit = - self.plogp(self.mod_exit[fromM + 1])                               \
-                                          - self.plogp(self.mod_exit[toM + 1])                                 \
-                                          + self.plogp(self.mod_exit[fromM + 1] - node_i_exit + 2*wfromM)      \
-                                          + self.plogp(self.mod_exit[toM + 1] + node_i_exit - 2*wtoM)
+                    self.exitDegree        -= self.mod_exit[fromM + correction] + self.mod_exit[bestM + correction]
+                    self.exit_log_exit     -= self.plogp(self.mod_exit[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction])
+                    self.degree_log_degree -= self.plogp(self.mod_exit[fromM + correction] + self.mod_degree[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction] + self.mod_degree[bestM + correction])
 
-                    delta_degree_log_degree = - self.plogp(self.mod_exit[fromM +1 ] + self.mod_degree[fromM +1])                                          \
-                                              - self.plogp(self.mod_exit[toM + 1] + self.mod_degree[toM + 1])                                              \
-                                              + self.plogp(self.mod_exit[fromM +1 ] + self.mod_degree[fromM +1] - node_i_exit - node_i_degree + 2*wfromM) \
-                                              + self.plogp(self.mod_exit[toM + 1] + self.mod_degree[toM + 1] + node_i_exit + node_i_degree - 2*wtoM)
+                    self.mod_exit[fromM + correction]    -= node_i_exit - 2*wfromM
+                    self.mod_degree[fromM + correction]  -= node_i_degree
 
-                    deltaL = delta_exit - 2.0 * delta_exit_log_exit + delta_degree_log_degree
-
-                if deltaL < best_delta:
-                    bestM = toM
-                    best_weight = wtoM
-                    best_delta = deltaL
-
-            if bestM != fromM:
-                node_i_exit   = self.graph.node[pick][EXIT]
-                node_i_degree = self.graph.degree(pick)
-
-                correction = 1
-
-                self.exitDegree        -= self.mod_exit[fromM + correction] + self.mod_exit[bestM + correction]
-                self.exit_log_exit     -= self.plogp(self.mod_exit[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction])
-                self.degree_log_degree -= self.plogp(self.mod_exit[fromM + correction] + self.mod_degree[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction] + self.mod_degree[bestM + correction])
-
-                self.mod_exit[fromM + correction]    -= node_i_exit - 2*wfromM
-                self.mod_degree[fromM + correction]  -= node_i_degree
-                # TODO member structure
-                #self.mod_members[fromM] -= 0 # self.graph.node[pick]
-                self.mod_exit[bestM + correction]    += node_i_exit - 2*best_weight
-                self.mod_degree[bestM + correction]  += node_i_degree
-                # TODO member structure
-                #self.mod_members[bestM + correction] += 0 #self.graph.node[pick]
-
-                self.exitDegree        += self.mod_exit[fromM + correction] + self.mod_exit[bestM + correction]
-                self.exit_log_exit     += self.plogp(self.mod_exit[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction])
-                self.degree_log_degree += self.plogp(self.mod_exit[fromM + correction] + self.mod_degree[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction] + self.mod_degree[bestM + correction])
-
-                self.exit = self.plogp(self.exitDegree)
-
-                self.code_length = self.exit - 2.0 * self.exit_log_exit + self.degree_log_degree - self.nodeDegree_log_nodeDegree
-
-                # See other TODO
-                #node[pick]['MODULE'] = bestM;
-                print "I was here"
+                    self.mod_exit[bestM + correction]    += node_i_exit - 2*best_weight
+                    self.mod_degree[bestM + correction]  += node_i_degree
 
 
-    def first_pass(self):
-         best_new_module = self.determine_best_new_module()
+                    self.exitDegree        += self.mod_exit[fromM + correction] + self.mod_exit[bestM + correction]
+                    self.exit_log_exit     += self.plogp(self.mod_exit[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction])
+                    self.degree_log_degree += self.plogp(self.mod_exit[fromM + correction] + self.mod_degree[fromM + correction]) + self.plogp(self.mod_exit[bestM + correction] + self.mod_degree[bestM + correction])
+
+                    self.exit = self.plogp(self.exitDegree)
+
+                    self.code_length = self.exit - 2.0 * self.exit_log_exit + self.degree_log_degree - self.nodeDegree_log_nodeDegree
+
+                    #node[pick]['MODULE'] = bestM;
+                    self.modules[pick] = bestM
+
+            if (curr_mod - self.code_length ) < EPSILON_REDUCED:
+                break
+
+    def first_pass(self, iteration):
+        #while passes_done != PASS_MAX
+        self.determine_best_new_module(iteration)
+
 
 
 
@@ -196,9 +254,9 @@ class Partition(object):
         aggregated_graph = nx.Graph()
 
         # The new graph consists of as many "supernodes" as there are partitions
-        aggregated_graph.add_nodes_from(set(partition.values()))
+        aggregated_graph.add_nodes_from(set(self.modules.values()))
         # make edges between communites, bundle more edges between nodes in weight attribute
-        edge_list=[(partition[node1], partition[node2], attr.get('weight', 1) ) for node1, node2, attr in graph.edges(data=True)]
+        edge_list=[(self.modules[node1], self.modules[node2], attr.get('weight', 1) ) for node1, node2, attr in self.graph.edges(data=True)]
         sorted_edge_list = sorted(edge_list)
         sum_z = lambda tuples: sum(t[2] for t in tuples)
         weighted_edge_list = [(k[0], k[1], sum_z(g)) for k, g in groupby(sorted_edge_list, lambda t: (t[0], t[1]))]
@@ -212,30 +270,39 @@ def infomap(graph):
 
     # partition.move()
 
+    iteration =0
 
     partition = Partition(graph)
     partition.init()
 
     parition_list = list()
-    partition.first_pass()
+    partition.first_pass(iteration)
+    best_partition = partition.modules
     new_codelength = partition.code_length
-    # wrong arugment
-    partition = partition.renumber(partition)
-    parition_list.append(partition)
+    partition.modules = partition.renumber_modules(best_partition)
+    parition_list.append(partition.modules)
     codelength = new_codelength
-    current_graph = second_pass(partition, graph)
-    parition = parition.reinitialize(graph)
+    current_graph = partition.second_pass()
+    partition.graph = current_graph
+    partition.init()
+
+    iteration += 1
 
     while True:
-        first_pass()
-        new_codelength = partition.codelength
-        if new_codelength - codelength < EPSILON_REDUCED :
+        partition.first_pass(iteration)
+        best_partition = partition.modules
+        new_codelength = partition.code_length
+        if codelength - new_codelength  < EPSILON_REDUCED :
             break
-        partition = renumber(partition)
-        parition_list.append(partition)
+        partition.modules = partition.renumber_modules(best_partition)
+        parition_list.append(partition.modules)
         codelength = new_codelength
-        graph = second_pass(partition, graph)
-        parition = parition.reinitialize(graph)
+        current_graph = partition.second_pass()
+        codelength = new_codelength
+        partition.graph = current_graph
+        partition.init()
+
+        iteration += 1
     return parition_list[:]
 
 
@@ -243,8 +310,9 @@ def main():
     #test prep
     graph = btg.build_graph()
     # call to main algorithm method
-    infomap(graph)
-
+    graph_partition = infomap(graph)
+    print graph_partition
+    print len(set(graph_partition[0].values()))
 
 if __name__ == '__main__':
     main()
